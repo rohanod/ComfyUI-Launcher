@@ -1,5 +1,7 @@
 #!/bin/bash
+
 echo "Installing required packages..."
+echo
 echo
 pip install -r requirements.txt
 
@@ -16,10 +18,9 @@ celery -A server.celery_app --workdir=. worker --loglevel=DEBUG &
 celery_worker_pid=$!
 echo "Celery worker started with PID: $celery_worker_pid"
 
-# Install cloudflared
-echo "Installing cloudflared..."
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-dpkg -i cloudflared-linux-amd64.deb
+# Install localtunnel
+echo "Installing localtunnel..."
+npm install -g localtunnel
 
 # Find an open port
 find_open_port() {
@@ -45,20 +46,32 @@ is_comfyui_running() {
 # Wait for ComfyUI to start
 echo "Waiting for ComfyUI to start..."
 if is_comfyui_running; then
-  echo "ComfyUI is running, launching cloudflared..."
-  cloudflared tunnel --url http://127.0.0.1:$PORT &
-  cloudflared_pid=$!
-  echo "Cloudflared tunnel started with PID: $cloudflared_pid"
+  echo "ComfyUI is running, launching localtunnel..."
+  # Get the external IP address
+  EXTERNAL_IP=$(curl -s https://ipv4.icanhazip.com)
+  echo "The password/endpoint IP for localtunnel is: $EXTERNAL_IP"
 
-  # Get the cloudflared URL from the logs
-  sleep 5 # Give cloudflared some time to start
-  CLOUDFLARED_URL=$(grep "trycloudflare.com" server.log | tail -n 1 | awk '{print $6}')
+  # Run localtunnel in the background
+  lt --port $PORT &
+  localtunnel_pid=$!
+  echo "Localtunnel started with PID: $localtunnel_pid"
 
-  if [ -n "$CLOUDFLARED_URL" ]; then
-    echo "ComfyUI is accessible via: $CLOUDFLARED_URL"
+  # Get the localtunnel URL from the logs
+  sleep 5 # Give localtunnel some time to start
+  LOCALTUNNEL_URL=$(grep "your url is:" server.log | tail -n 1 | awk '{print $4}')
+
+  if [ -n "$LOCALTUNNEL_URL" ]; then
+    echo "ComfyUI is accessible via: $LOCALTUNNEL_URL"
   else
-    echo "Failed to retrieve Cloudflared URL. Check server.log for errors."
+    echo "Failed to retrieve Localtunnel URL. Check server.log for errors."
   fi
 else
   echo "ComfyUI failed to start."
+fi
+
+# kill Celery worker when server.py is done
+kill $celery_worker_pid
+kill $server_pid
+if [ -n "$localtunnel_pid" ]; then
+  kill $localtunnel_pid
 fi
