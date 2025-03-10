@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Install netcat if not already installed
+if ! command -v nc &> /dev/null; then
+    echo "Installing netcat..."
+    apt-get update
+    apt-get install -y netcat
+fi
+
+# Install netstat if not already installed
+if ! command -v netstat &> /dev/null; then
+    echo "Installing net-tools..."
+    apt-get update
+    apt-get install -y net-tools
+fi
+
 echo "Installing required packages..."
 echo
 echo
@@ -51,19 +65,16 @@ if is_comfyui_running; then
   EXTERNAL_IP=$(curl -s https://ipv4.icanhazip.com)
   echo "The password/endpoint IP for localtunnel is: $EXTERNAL_IP"
 
-  # Run localtunnel in the background
-  lt --port $PORT &
-  localtunnel_pid=$!
-  echo "Localtunnel started with PID: $localtunnel_pid"
-
-  # Get the localtunnel URL from the logs
-  sleep 5 # Give localtunnel some time to start
-  LOCALTUNNEL_URL=$(grep "your url is:" server.log | tail -n 1 | awk '{print $4}')
+  # Run localtunnel and capture the URL
+  echo "Launching localtunnel..."
+  EXTERNAL_IP=$(curl -s https://ipv4.icanhazip.com)
+  echo "The password/endpoint IP for localtunnel is: $EXTERNAL_IP"
+  LOCALTUNNEL_URL=$(lt --port $PORT 2>&1 | grep "your url is:" | tail -n 1 | awk '{print $4}')
 
   if [ -n "$LOCALTUNNEL_URL" ]; then
     echo "ComfyUI is accessible via: $LOCALTUNNEL_URL"
   else
-    echo "Failed to retrieve Localtunnel URL. Check server.log for errors."
+    echo "Failed to retrieve Localtunnel URL."
   fi
 else
   echo "ComfyUI failed to start."
@@ -72,6 +83,3 @@ fi
 # kill Celery worker when server.py is done
 kill $celery_worker_pid
 kill $server_pid
-if [ -n "$localtunnel_pid" ]; then
-  kill $localtunnel_pid
-fi
