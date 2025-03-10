@@ -62,10 +62,3 @@ if is_comfyui_running; then
 else
   echo "ComfyUI failed to start."
 fi
-
-# kill Celery worker when server.py is done
-kill $celery_worker_pid
-kill $server_pid
-if [ -n "$cloudflared_pid" ]; then
-  kill $cloudflared_pid
-fi
